@@ -29,9 +29,10 @@ abstract class CodersApp {
      * 
      */
     protected function __construct($root) {
-        
+
         $this->_endpoint = self::__name($root);
     }
+
     /**
      * @param string $string
      * @return String
@@ -61,7 +62,7 @@ abstract class CodersApp {
      * 
      * @return string
      */
-    public final function endpoint(){
+    public final function endpoint() {
         return $this->_endpoint;
     }
 
@@ -87,49 +88,125 @@ abstract class CodersApp {
      * @param string $action
      */
     public final function run($action = '') {
-        
-        $response = sprintf('run%sResponse', ucfirst(strlen($action) ? $action : 'main' ) );
-        
-        $input = array_merge($_GET,$_POST);
-        
-        return method_exists($this,$response) ?
-                $this->$response( $input ) :
-                $this->runErrorResponse($input,$action);
+
+        $response = sprintf(
+                is_admin() ? 'run%sAdmin' : 'run%sResponse',
+                ucfirst(strlen($action) ? $action : 'main'));
+
+        $input = array_merge($_GET, $_POST);
+
+        return method_exists($this, $response) ?
+                $this->$response($input) :
+                $this->runErrorResponse($input, $action);
     }
+
     /**
      * @param array $input
      * @return bool
      */
-    protected function runErrorResponse( array $input = array() , $action = '' ) {
-        
-        printf('<!-- Invalid action %s -->',$action);
-        
+    protected function runErrorResponse(array $input = array(), $action = '') {
+
+        printf('<!-- Invalid action %s -->', $action);
+
         return FALSE;
     }
+
     /**
      * @param array $input
      * @return bool
      */
-    protected function runMainResponse( array $input = array( ) ) {
+    protected function runMainResponse(array $input = array()) {
 
         // logics here
         printf('<!-- Main Action Response OK -->');
-        
+
+        return TRUE;
+    }
+    /**
+     * 
+     * @param array $input
+     */
+    protected function runMainAdmin( array $input = array( ) ) {
+        printf('<h1>Main Admin</h1>');
+        var_dump($input);
+        return TRUE;
+    }
+    /**
+     * 
+     * @param array $input
+     */
+    protected function runErrorAdmin( array $input = array( ) ) {
+        printf('<h1>Main Admin Error Page</h1>');
+        var_dump($input);
         return TRUE;
     }
 
     /**
      * 
      */
-    public function setupAdminMenu() {
-        var_dump(sprintf('%s : %s', self::class, $this->_endpoint));
+    public function registerAdminMenu( array $menu ) {
+
+       if( count( $menu ) === 0 ){
+           return;
+       }
+       
+       $app = $this;
+       
+       add_action('admin_menu', function() use( $menu, $app ) {
+            $endpoint = $menu['slug'];
+            if (strlen($menu['parent']) === 0) {
+                add_menu_page(
+                        $menu['name'], $menu['title'],
+                        $menu['capability'], $endpoint,
+                        function() use( $app) {
+                            $app->run();
+                        },
+                        $menu['icon'], $menu['position']);
+
+                $submenu = array_key_exists('children', $menu ) ? $menu['children'] : array();
+                
+                foreach ($submenu as $option) {
+                    $context = $option['slug'];
+                    add_submenu_page(
+                            $endpoint,
+                            $option['name'],
+                            $option['title'],
+                            $option['capability'],
+                            $endpoint . '-' . $context,
+                            function() use($app,$context) {
+                                $app->run($context);
+                            },
+                            $option['position']);
+                }
+            }
+            else {
+                //append to other existing menus
+                add_submenu_page(
+                        $menu['parent'], $menu['name'], $menu['title'],
+                        $menu['capability'], $endpoint,
+                        function() use($app) {
+                            $app->run();
+                        },
+                        $menu['position']);
+                }
+        });
     }
 
     /**
      * 
      */
-    public function admin() {
-        var_dump(sprintf('%s : %s', self::class, $this->_endpoint));
+    public function adminMenu() {
+        return  array(
+                //framework menu setup
+                //'parent' => '',
+                'name' => __('Coders App','coders_app'),
+                'title' => __('Coders App','coders_app'),
+                'capability' => 'administrator',
+                'slug' => 'coders-app',
+                'icon' => 'dashicons-grid-view',
+                //'children' => array(),
+                'position' => 100,
+            );
     }
 
     /**
@@ -149,21 +226,22 @@ abstract class CodersApp {
      * @return \CodersApp
      */
     public static final function create($endpoint) {
-        
+
         if (self::has($endpoint)) {
-            
+
             $class = self::__cc($endpoint);
-            
-            $path = sprintf('%s/%s/application.php', preg_replace('/\\\\/', '/', WP_PLUGIN_DIR), $endpoint);
-            
-            if (file_exists($path)) require_once $path;
-            
-            self::$_instance = class_exists( $class, true) && is_subclass_of($class, self::class, true) ?
+
+            $path = sprintf('%s/%s/application.php',
+                    preg_replace('/\\\\/', '/', WP_PLUGIN_DIR),
+                    $endpoint);
+
+            if (file_exists($path))
+                require_once $path;
+
+            return class_exists($class, true) && is_subclass_of($class, self::class, true) ?
                     new $class($endpoint) :
                     null;
         }
-        
-        return self::$_instance;
     }
 
     /**
@@ -203,47 +281,55 @@ abstract class CodersApp {
      */
     public static final function init() {
 
-        /* SETUP ROUTE | URL */
-        if (is_admin()) {
-            add_action('init', function () {
+        if( !defined('CODERS_APP_ROOT') ){
+            //setup framework root paths
+            define('CODERS_APP_ROOT', preg_replace('/\\\\/', '/', __DIR__));
+            
+            /* SETUP ROUTE | URL */
+            if (is_admin()) {
                 //admin
-                foreach (CodersApp::apps() as $app => $class) {
+                foreach (CodersApp::apps() as $app) {
                     $instance = CodersApp::create($app);
                     if (!is_null($instance)) {
-                        $instance->setupAdminMenu();
+                        $instance->registerAdminMenu($instance->adminMenu());
                     }
                 }
-            }, 10);
-        } else {
-            add_action('plugins_loaded', function () {
+            }
+            else {
                 //run the app register setup
                 do_action('coders_app_register');
-                //do some more setups here
-            }, 10000);
-            add_action('init', function () {
+
                 //public
                 global $wp;
                 foreach (CodersApp::apps() as $app) {
-                    //CodersApp::install($app);
                     $wp->add_query_var($app);
                 }
+
                 /* SETUP RESPONSE */
                 add_action('template_redirect', function () {
                     global $wp_query;
-                    $type = array_intersect(array_keys( $wp_query->query ), CodersApp::apps());
-                    if ( count($type) ) {
+                    $type = array_intersect(array_keys($wp_query->query), CodersApp::apps());
+                    if (count($type)) {
                         $wp_query->set('is_404', FALSE);
                         $app = CodersApp::create($type[0]);
-                        if( !is_null($app)){
-                            $app->run($wp_query->get( $app->endpoint(), 'main'));
+                        if (!is_null($app)) {
+                            $app->run($wp_query->get($app->endpoint(), 'main'));
                         }
                         exit;
                     }
                 }, 10);
-            }, 10);
+            }
         }
     }
 }
 
-CodersApp::init();
+//initialize framework hooks
+add_action('plugins_loaded', function () {
+    
+}, 10000);
+
+add_action('init', function () {
+
+    CodersApp::init();
+}, 100);
 
