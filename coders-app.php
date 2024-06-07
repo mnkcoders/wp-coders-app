@@ -35,6 +35,11 @@ abstract class CodersApp {
      * @var string
      */
     private $_endpoint = '';
+    /**
+     * 
+     * @var array
+     */
+    private $_require = array();
 
     /**
      * 
@@ -84,6 +89,28 @@ abstract class CodersApp {
     private static final function has($app) {
         return strlen($app) && in_array($app, self::$_apps);
         //return strlen($app) && array_key_exists($app, self::$_apps);
+    }
+    /**
+     * @param string $ext
+     * @return CodersApp
+     */
+    protected final function require( $ext ){
+        if( !in_array($ext, $this->_require)){
+            $this->_require[] = $ext;
+        }
+        return $this;
+    }
+    /**
+     * @return bool
+     */
+    protected final function validate(){
+
+        foreach( $this->_require as $ext ){
+            if(strlen($ext) && !in_array($ext, self::extensions())){
+                return FALSE;
+            }
+        }
+        return TRUE;
     }
 
     /**
@@ -293,19 +320,22 @@ abstract class CodersApp {
         //setup framework root paths
         define('CODERS_APP_ROOT', preg_replace('/\\\\/', '/', __DIR__));
 
-        $extensions = array();
-        $apps = array();
+        $extensions = [];
+        $apps = [];
         
         //load all dependencies before proceeding with the apps
-        do_action('register_coder_extensions',$extensions);
+        do_action('register_coder_extensions', $extensions);
         foreach( $extensions as $ext ){
             self::register(self::__name( $ext ) );
         }
+        //var_dump(self::extensions());
         //run the app register setup
         do_action('register_coder_app', $apps);
         foreach( $apps as $app ){
             self::add(self::__name($app));
         }
+        var_dump(self::apps());
+        die;
 
         /* SETUP ROUTE | URL */
         if (is_admin()) {
