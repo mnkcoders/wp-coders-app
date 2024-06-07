@@ -16,13 +16,21 @@ defined('ABSPATH') or die;
  * @author Coder01 <coder01@mnkcoder.com>
  * **************************************************************************** */
 
+/**
+ * CodersApp Application Bootstrapper
+ */
 abstract class CodersApp {
-
     /**
      * @var array
      */
     private static $_apps = array();
-    private static $_instance = NULL;
+    /**
+     * @var array
+     */
+    private static $_extensions  = array();
+    /**
+     * @var string
+     */
     private $_endpoint = '';
 
     /**
@@ -80,7 +88,12 @@ abstract class CodersApp {
      */
     public static final function apps() {
         return self::$_apps;
-        //return $list ? array_keys(self::$_apps) : self::$_apps;
+    }
+    /**
+     * @return array
+     */
+    public static final function extensions(){
+        return self::$_extensions;
     }
 
     /**
@@ -194,6 +207,16 @@ abstract class CodersApp {
         }
     }
     /**
+     * @param string $plugin
+     */
+    public static final function registerExtension( $plugin ){
+        $ext = self::__name($plugin);
+        if( !in_array($ext, self::$_extensions)){
+            self::$_extensions[] = $ext;
+        }
+    }
+
+    /**
      * @param string $endpoint
      * @return \CodersApp
      */
@@ -256,8 +279,11 @@ abstract class CodersApp {
             //setup framework root paths
             define('CODERS_APP_ROOT', preg_replace('/\\\\/', '/', __DIR__));
             
+            //load all dependencies before proceeding with the apps
+            do_action('register_coder_extensions');
+            
             //run the app register setup
-            do_action('coders_app_register');
+            do_action('register_coders_app');
             
             /* SETUP ROUTE | URL */
             if (is_admin()) {
