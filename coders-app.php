@@ -149,6 +149,7 @@ abstract class CodersApp {
      * @return \CodersApp
      */
     public static final function create($endpoint) {
+        
         if (self::has($endpoint)) {
             
             $class = self::__cc($endpoint);
@@ -157,11 +158,12 @@ abstract class CodersApp {
             
             if (file_exists($path)) require_once $path;
             
-            return class_exists( $class, true) && is_subclass_of($class, self::class, true) ?
+            self::$_instance = class_exists( $class, true) && is_subclass_of($class, self::class, true) ?
                     new $class($endpoint) :
                     null;
         }
-        return null;
+        
+        return self::$_instance;
     }
 
     /**
