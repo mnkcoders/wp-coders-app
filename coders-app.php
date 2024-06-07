@@ -1,6 +1,4 @@
-<?php
-
-defined('ABSPATH') or die;
+<?php defined('ABSPATH') or die;
 /* * *****************************************************************************
  * Plugin Name: Coders App
  * Plugin URI: https://coderstheme.org
@@ -126,42 +124,39 @@ abstract class CodersApp {
     public static final function extensions() {
         return self::$_extensions;
     }
+    /**
+     * @return array
+     */
+    protected function request(){
+        return array_merge( $_GET , $_POST);
+    }
 
     /**
      * 
      * @param string $action
      */
-    public final function run($action = '') {
+    public function run($action = '') {
 
-        $response = sprintf(
-                is_admin() ? 'runAdmin%s' : 'run%s',
-                ucfirst(strlen($action) ? $action : 'main'));
-
-        $input = array_merge($_GET, $_POST);
-
+        if(strlen($action) < 1 ){
+            $action = 'main';
+        }
+        $request = $this->request();
+        $request['action'] = $action;
+        $response = sprintf( is_admin() ? 'runAdmin%s' : 'run%s', ucfirst($action));
         return method_exists($this, $response) ?
-                $this->$response($input) :
-                (is_admin() ? $this->runAdminError($input) : $this->runError($input, $action));
+            $this->$response($request) :
+                $this->runError($request);
     }
 
     /**
      * @param array $input
      * @return bool
      */
-    protected function runError(array $input = array(), $action = '') {
+    protected function runError(array $input = array()) {
 
-        printf('<!-- Invalid action %s -->', $action);
+        printf('<!-- Invalid action %s -->', isset($input['action']) ? $input['action'] : 'UNDEFINED');
 
         return FALSE;
-    }
-
-    /**
-     * @param array $input
-     */
-    protected function runAdminError(array $input = array()) {
-        printf('<h1>Main Admin Error Page</h1>');
-        var_dump($input);
-        return TRUE;
     }
 
     /**
@@ -178,7 +173,7 @@ abstract class CodersApp {
      * @param array $input
      */
     protected function runAdminMain(array $input = array()) {
-        printf('<!-- runMain %s -->', $this->endpoint());
+        printf('<!-- runAdminMain %s -->', $this->endpoint());
         return TRUE;
     }
 
@@ -320,22 +315,20 @@ abstract class CodersApp {
         //setup framework root paths
         define('CODERS_APP_ROOT', preg_replace('/\\\\/', '/', __DIR__));
 
-        $extensions = [];
         $apps = [];
+        $extensions = [];
         
         //load all dependencies before proceeding with the apps
-        do_action('register_coder_extensions', $extensions);
+        do_action_ref_array('register_coder_extensions', array( &$extensions ) );
+        do_action_ref_array('register_coder_app', array( &$apps ) );
+
         foreach( $extensions as $ext ){
             self::register(self::__name( $ext ) );
         }
-        //var_dump(self::extensions());
-        //run the app register setup
-        do_action('register_coder_app', $apps);
+
         foreach( $apps as $app ){
             self::add(self::__name($app));
         }
-        var_dump(self::apps());
-        die;
 
         /* SETUP ROUTE | URL */
         if (is_admin()) {
@@ -361,7 +354,8 @@ abstract class CodersApp {
                     $wp_query->set('is_404', FALSE);
                     $app = CodersApp::create($type[0]);
                     if (!is_null($app)) {
-                        $app->run($wp_query->get($app->endpoint(), 'main'));
+                        $route = $wp_query->get($app->endpoint());
+                        $app->run( is_string($route) ? $route : '' );
                     }
                     exit;
                 }
