@@ -159,6 +159,7 @@ abstract class CodersApp {
         $request = $this->request();
         $request['action'] = $action;
         $response = sprintf( is_admin() ? 'runAdmin%s' : 'run%s', ucfirst($action));
+        
         if(method_exists($this, $response)){
             return $this->$response( $request );
         }
@@ -197,11 +198,11 @@ abstract class CodersApp {
      * @return CodersApp for chaining
      */
     protected function display($name ) {
-        $path = $this->path(sprintf('%s/%s/',is_admin() ? 'admin' : 'public', $name));
+        $path = $this->path(sprintf('%s/%s.php',is_admin() ? 'admin' : 'public', $name));
         if (file_exists($path)) {
             require $path;
         } else {
-            printf('<!-- invalid display %s0 -->', $name);
+            printf('<!-- invalid display %s -->', $path);
         }
         return $this;
     }    
@@ -217,7 +218,7 @@ abstract class CodersApp {
 
         add_action('admin_menu', function () use ($menu, $app) {
             $endpoint = $menu['slug'];
-            if (strlen($menu['parent']) === 0) {
+            if (!isset($menu['parent']) || strlen($menu['parent']) === 0) {
                 add_menu_page(
                         $menu['name'], $menu['title'], $menu['capability'], $endpoint,
                         array($app, 'run'), $menu['icon'], $menu['position']);
@@ -227,9 +228,12 @@ abstract class CodersApp {
                 foreach ($submenu as $option) {
                     $context = $option['slug'];
                     add_submenu_page($endpoint, $option['name'], $option['title'], $option['capability'],
-                            $endpoint . '-' . $context, array($app, 'run', $context), $option['position']);
+                            $endpoint . '-' . $context,
+                            array($app, 'run', $context),
+                            isset($option['position']) ? $option['position'] : 10 );
                 }
-            } else {
+            }
+            else {
                 //append to other existing menus
                 add_submenu_page(
                         $menu['parent'], $menu['name'], $menu['title'], $menu['capability'],
@@ -348,7 +352,7 @@ abstract class CodersApp {
         //load all dependencies before proceeding with the apps
         do_action_ref_array('register_coder_extensions', array( &$extensions ) );
         do_action_ref_array('register_coder_app', array( &$apps ) );
-
+        
         foreach( $extensions as $ext ){
             self::register(self::__name( $ext ) );
         }
@@ -356,6 +360,8 @@ abstract class CodersApp {
         foreach( $apps as $app ){
             self::add(self::__name($app));
         }
+        //var_dump(self::apps());
+        //die;
 
         /* SETUP ROUTE | URL */
         if (is_admin()) {
