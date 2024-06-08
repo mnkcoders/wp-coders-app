@@ -64,6 +64,12 @@ abstract class CodersApp {
         $path = explode('/', preg_replace('/\\\\/', '/', $plugin));
         return $path[count($path) - 1];
     }
+    /**
+     * @return string|URL
+     */
+    private static final function __pluginsDir(){
+        return preg_replace('/\\\\/', '/', WP_PLUGIN_DIR);
+    }
 
     /**
      * @return string
@@ -79,14 +85,23 @@ abstract class CodersApp {
     public final function endpoint() {
         return $this->_endpoint;
     }
+    /**
+     * @param string $resource
+     * @return string|URL
+     */
+    protected final function path( $resource = '' ){
+        
+        $path = sprintf('%s/%s',self::__pluginsDir(),$this->endpoint());
+    
+        return strlen($resource) ? $path . '/' . $resource : $path;
+    }
 
     /**
      * @param string $app
      * @return boolean
      */
-    private static final function has($app) {
+    protected static final function has($app) {
         return strlen($app) && in_array($app, self::$_apps);
-        //return strlen($app) && array_key_exists($app, self::$_apps);
     }
     /**
      * @param string $ext
@@ -124,6 +139,7 @@ abstract class CodersApp {
     public static final function extensions() {
         return self::$_extensions;
     }
+
     /**
      * @return array
      */
@@ -143,9 +159,10 @@ abstract class CodersApp {
         $request = $this->request();
         $request['action'] = $action;
         $response = sprintf( is_admin() ? 'runAdmin%s' : 'run%s', ucfirst($action));
-        return method_exists($this, $response) ?
-            $this->$response($request) :
-                $this->runError($request);
+        if(method_exists($this, $response)){
+            return $this->$response( $request );
+        }
+        return $this->runError($request);
     }
 
     /**
@@ -153,9 +170,7 @@ abstract class CodersApp {
      * @return bool
      */
     protected function runError(array $input = array()) {
-
-        printf('<!-- Invalid action %s -->', isset($input['action']) ? $input['action'] : 'UNDEFINED');
-
+        //printf('<!-- Invalid action %s -->', isset($input['action']) ? $input['action'] : 'UNDEFINED');
         return FALSE;
     }
 
@@ -164,7 +179,7 @@ abstract class CodersApp {
      * @return bool
      */
     protected function runMain(array $input = array()) {
-        printf('<!-- runMain %s -->', $this->endpoint());
+        //printf('<!-- runMain %s -->', $this->endpoint());
         return TRUE;
     }
 
@@ -173,9 +188,23 @@ abstract class CodersApp {
      * @param array $input
      */
     protected function runAdminMain(array $input = array()) {
-        printf('<!-- runAdminMain %s -->', $this->endpoint());
+        //printf('<!-- runAdminMain %s -->', $this->endpoint());
         return TRUE;
     }
+    
+    /**
+     * @param String $name
+     * @return CodersApp for chaining
+     */
+    protected function display($name ) {
+        $path = $this->path(sprintf('%s/%s/',is_admin() ? 'admin' : 'public', $name));
+        if (file_exists($path)) {
+            require $path;
+        } else {
+            printf('<!-- invalid display %s0 -->', $name);
+        }
+        return $this;
+    }    
 
     /**
      * 
@@ -252,15 +281,13 @@ abstract class CodersApp {
      * @param string $endpoint
      * @return \CodersApp
      */
-    public static final function create($endpoint) {
+    public static final function create( $endpoint ) {
 
         if (self::has($endpoint)) {
 
             $class = self::__cc($endpoint);
 
-            $path = sprintf('%s/%s/application.php',
-                    preg_replace('/\\\\/', '/', WP_PLUGIN_DIR),
-                    $endpoint);
+            $path = sprintf('%s/%s/application.php', self::__pluginsDir(), $endpoint);
 
             if (file_exists($path))
                 require_once $path;
