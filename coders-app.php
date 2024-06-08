@@ -42,7 +42,7 @@ abstract class CodersApp {
     /**
      * 
      */
-    protected function __construct($root) {
+    protected function __construct( $root ) {
 
         $this->_endpoint = self::__name($root);
     }
